@@ -1,0 +1,55 @@
+---
+title: "Class Reference"
+author: "Student name"
+output:
+  html_document:
+    theme: cerulean
+    highlight: pygments
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Consider this a personal guide to the commands and functions you will learn. In general, when you come across an R command or function that you want to remember, put it in here along with a description of what it does and when you'd use it.
+
+
+## Things I Learned on Jan. 27
+
+The command to set a working directory is setwd(). For example:
+
+```{r}
+setwd("~/Documents/GitHub/data_journalism_2022_spring")
+```
+
+```{r}
+install.packages("tidyverse")
+library(tidyverse)
+```
+
+
+### Summarizing
+
+I need to use group_by and summariz. Here's an example of grouping by county and calculating counts, sum and other descriptive statistics.
+
+
+```{r}
+ppp_maryland_loans %>%
+  group_by(project_county_name) %>%
+  summarise(
+    count_loans = n(),
+    total_loans_amount = sum(amount),
+    mean_loan_amount = mean(amount),
+    median_loan_amount = median(amount),
+    min_loan_amount = min(amount),
+    max_loan_amount = max(amount)
+  ) %>%
+  arrange(desc(max_loan_amount))
+```
+
