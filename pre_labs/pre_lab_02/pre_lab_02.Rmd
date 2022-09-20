@@ -28,7 +28,7 @@ library(lubridate) # look up lubridate and describe its uses in your reference n
 **Task** Load the Maryland 2018 Primary Election county results dataset by running the following codeblock.
 
 ```{r}
-primary_18 <- read_csv('data/maryland_primary_2018.csv')
+primary_18 <- read_csv(here::here("pre_labs", "pre_lab_02", "data", "maryland_primary_2018.csv"))
 ```
 
 ### Task 3: Glimpse data
@@ -54,7 +54,7 @@ primary_18 %>%
 
 Describe what you think this code is doing below.
 
-**Answer** 
+**Answer** This code creates a new column, `percent_election_day`, that holds the proportion of the total number of votes that were made on election day.  
 
 ### Task 5: Better percentage calculation
 **Task** Run the following code to make our new column called `percent_payroll` show a percentage instead of a decimal.
@@ -77,13 +77,13 @@ primary_18 %>%
   select(office, district, name_raw, party, jurisdiction, election_day, votes) %>% 
   mutate(
   percent_election_day = (election_day/votes)*100
-)  %>% arrange(desc(percent_election_day))
+)  %>% 
+  arrange(desc(percent_election_day))
 ```
 
 How did the answer change from the previous task, and why?
 
-**Answer**
-
+**Answer** The dataframe is now ordered by `percent_election_day`. No values changed. This is a more meaningful order. 
 
 ### Task 7: Mutate with ordering, part 2
 **Task** Run the following code to order by our new column, but in ascending order
@@ -99,7 +99,7 @@ primary_18 %>%
 
 Is this a more interesting or useful answer? Why?
 
-**Answer**
+**Answer** Yes, it shows the candidates who received the highest proportion of votes not on election day. This may indicate that they receive strong support from people who are more likely to vote by mail or early (for example, young people, military personnel, people living overseas). 
 
 ### Task 8: Standardize existing data using mutate
 
@@ -127,8 +127,11 @@ standardized_maryland_cities <- maryland_cities %>%
 
 **Task** Search the Internet for tidyverse functions similar to str_to_upper. Name at least two and describe what they do.
 
-**Answer**
+**Answer** 
 
+`str_to_sentence` capitalises the first character and makes every following character lowercase. 
+
+`str_to_lower` makes all characters lowercase. 
 
 There are lots of potential uses for standardization - addresses, zip codes, anything that can be misspelled or abbreviated.
 
@@ -185,7 +188,7 @@ maryland_winred_categories %>%
 
 What's the largest category in terms of dollar amount?
 
-**Answer** 
+**Answer** Less than $100
 
 Mutate is there to make your data more useful and to make it easier for you to ask more and better questions of it.
 
@@ -232,7 +235,7 @@ And now we only have five columns of data for whatever analysis we might want to
 
 Notice that we made a new variable to hold the result. Why is that important?
 
-**Answer** 
+**Answer** If we do not create a new object, we cannot access these manipulations without running the code again.
 
 ### Task 12: Combining filters
 
@@ -330,5 +333,5 @@ So the month of June 2022 had the most expenditures by far in this data. We'll b
 
 Describe the values in the new `month` column - what do you think is going on there?
 
-**Answer**
+**Answer** You have binned the data by month-year. For example, any date that falls within the month of June 2022 is recoded to 1 June 2022. This means that we can consider the values by month, instead of by day. 
 
