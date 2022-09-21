@@ -33,28 +33,71 @@ wv_winred_contribs <- read_rds("data/lab_02.rds")
 ## Answer questions
 
 **Q1** Create a new column that divides the contribution amounts into the following options - less than $10, $10-$25, $26-$50, $51_$100, $101-$500, $501 and up - and calculates how many contributions are in each group. How would you describe the distribution of contributions in a sentence?
-A1. 
+
+A1. Most West Virginian individuals contribute between \$10 and \$25 to conservative campaigns, with fewer and fewer individuals contributing higher amounts.  
 
 ```{r}
+wv_winred_contribs |> 
+  mutate(contribs_binned = case_when(amount < 10 ~ "Less than $10",
+                                     amount < 26 ~ "Between $10 and $25", 
+                                     amount < 51 ~ "Between $26 and $50",
+                                     amount < 101 ~ "Between $51 and $100",
+                                     amount < 501 ~ "Between $101 and $500",
+                                     TRUE ~ "Over $500"),
+         contribs_binned = factor(contribs_binned, levels = c("Less than $10",
+                                                              "Between $10 and $25", 
+                                                              "Between $26 and $50", 
+                                                              "Between $51 and $100", 
+                                                              "Between $101 and $500", 
+                                                              "Over $500"))) |> 
+  group_by(contribs_binned) |> 
+  summarise(n = n()) |> 
+  ggplot(aes(n, contribs_binned)) + 
+  geom_col() + 
+  theme_minimal() + 
+  theme(plot.title.position = "plot") + 
+  labs(title = "Number of contributions by contribution amount",
+       x = "Number of contributions",
+       y = NULL)
 ```
 
 Q2. Which West Virginia donors made the most contributions of less than $10? You'll need to use a combination of columns to get unique donors.  
-A2. 
 
 ```{r}
+wv_winred_contribs |> 
+  filter(amount < 10) |> 
+  group_by(first_name, middle_name, last_name, address_one) |> 
+  summarise(n_contributions = n()) |> 
+  ungroup() |> 
+  arrange(desc(n_contributions))
 ```
+
+A2. The individual who made the largest number of contributions under \$10 is Rev, Dr John Almond. This dataset records contributions made over a three-month period. This analysis assumes that individuals did not move house in that three month period, allowing us to distinguish individuals with the same name. 
 
 Q3. What questions do the results of Q2 raise in your mind? How could you use the data to explore them? No code here, just your questions.
-A3. 
+
+A3. Why are individuals providing multiple, and sometimes hundreds of, small contributions in this three month period? To explore this question, I would map out the timeline of these contributions, including exploring to which campaign they are providing these donations. I would hope to discover a pattern: perhaps these individuals have set up regular contributions over a set time period. If not pattern is detected, perhaps these individuals are collecting donations, that they are providing to the campaigns as they receive them.   
 
 Q4. Which month saw the most contributions?
-A4. 
 
 ```{r}
-```
+wv_winred_contribs |> 
+  mutate(month_year = round_date(date, unit = "month")) |> 
+  group_by(month_year) |> 
+  summarise(total_amount = sum(amount)) |> 
+  arrange(desc(total_amount)) |> 
+  head(n = 1)
+``` 
+
+A4. April saw the most contributions. 
 
 Q5. How many contributions of $2,900 - the individual maximum donation - were there, and who did they go to? How many of the recipients are from West Virginia? Do some googling to find out.
-A5. 
 
 ```{r}
+wv_winred_contribs |> 
+  filter(amount == 2900) |> 
+  group_by(memo_text) |> 
+  summarise(n_contribs = n())
 ```
+
+A5. Six contributions of /$2,900 were made. Carol for Congress received three of these, and McKinley for Congress, Palazzo for Congress, and Zinke for Congress each received one contribution of this maximum amount. Only two of these candidates are from West Virginia.  
