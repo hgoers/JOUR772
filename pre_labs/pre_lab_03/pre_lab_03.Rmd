@@ -40,18 +40,17 @@ texas_precinct_20 <- read_csv("data/tx_precinct_2020.csv", guess_max=10)
 ### Task 3: Check for problems on load
 **Task** Check for problems that occurred when loading the Texas precinct results by running the following code.  How many problems were there, as shown by the number of rows in the output table showing errors? What do you think the problem is that R is describing? Answer below.
 
-**Answer** There were 1,640 problems. There are mixed types of data in each column. 
+**Answer** There were 1,640 problems. There are mixed types of data in several columns. 
 
 ```{r}
 
 problems(texas_precinct_20)
-
 ```
 
 ### Task 4: Reload data
 **Task** Run the following codeblock to reload the data, using every row to set the data types. Does it show any parsing errors when you run? Answer below
 
-**Answer** No.
+**Answer** No warnings or errors provided. 
 
 ```{r}
 texas_precinct_20 <- read_csv("data/tx_precinct_2020.csv", guess_max=476915)
@@ -59,7 +58,9 @@ texas_precinct_20 <- read_csv("data/tx_precinct_2020.csv", guess_max=476915)
 
 ### Task 5: Examine the data with glimpse
 **Task** Run the following codeblock to glimpse the data.  What data type is the "amount" field?  What data type is the "name" field? What data type is the id column? Answer below.
-**Answer**
+
+**Answer** The `election_day` field is a character despite the values looking numeric. 
+
 ```{r}
 glimpse(texas_precinct_20)
 ```
@@ -80,12 +81,7 @@ We can fix that pretty easily, by changing that value to "49" using `case_when` 
 
 ```{r}
 texas_precinct_20 <- texas_precinct_20 %>%
-  mutate(election_day = case_when(
-    election_day == '5+' ~ '49',
-    TRUE ~ election_day
-  ))
-
-texas_precinct_20 <- texas_precinct_20 %>% mutate(election_day = as.numeric(election_day))
+  mutate(election_day = if_else(election_day == '5+', 49, as.numeric(election_day)))
 
 glimpse(texas_precinct_20)
 ```
@@ -93,7 +89,7 @@ glimpse(texas_precinct_20)
 ### Task 7: Examine the franchise column for missing values.
 **Task** Run the following codeblock to group by mail votes, count the number of precinct results, then sort from highest to lowest on count. How many results are there where mail is NA? What's the implication there? Answer below.
 
-**Answer**: 402,345 results list mail as NA. This represents `r round(402345/476915 * 100, 2)` percent of all results. 
+**Answer**: 402,345 results list mail as NA. This represents `r round(402345/476915 * 100, 2)` percent of all results. To understand mail-in voting at the state level, we would need to uncover what NA represents. If NA is meaningful and consistently recorded across precincts, we can use these data to answer our questions. If not, we need to deal with this missingness. We could listwise delete the rows that including missing data, or we could try to impute the missing data from other, similar precincts that have mail data.   
 
 ```{r}
 
@@ -118,6 +114,7 @@ install.packages('lubridate')
 ```{r}
 library(lubridate)
 ```
+
 ### Task 10: Load Yadkin voter data
 **Task** Run the following codeblock to load data on registered voters in Yadkin County, North Carolina.
 
@@ -128,7 +125,7 @@ yadkin_voters <- read_csv("data/yadkin_voters.csv")
 ### Task 11: Look for date gaps in data
 **Task** Run the following codeblock to create a new column called "registration_month" that extracts the month and year from the "registr_dt" column.  Group by the new "registration_month" column, count, and sort by "registration_month". How many registrations are there in the data for January 1900? What do you think the first 20 results suggests? Answer below.
 
-**Answer** 12. 
+**Answer** There are 12. registrations in the data for January 1900. The first two results suggest some data input error: these dates are simply too early to be believable. The other 18 results are more plausible. They suggest a few very old voters in Yadkin.   
 
 ```{r}
 yadkin_voters %>% 
@@ -143,7 +140,7 @@ yadkin_voters %>%
 ### Task 14: Check for suspicious outliers
 **Task** Run the following codeblock to find the number of registered voters grouped by voter status reason, using summarise() to count. Are any of these worthy of exploration to you? Why or why not? Answer below.
 
-**Answer**
+**Answer** A large number of voters are listed as REMOVED AFTER 2 FED GENERAL ELECTIONS IN INACTIVE STATUS. Thousands more appear to be at risk of being removed from the voter roll either because they have not returned their confirmation, or because their confirmations was returned after being marked as undeliverable. It would be interesting to see this process of removal and whether it appropriately reflects the issues the county is attempting to resolve or if, in fact, it disenfrancises groups within the county. 
 
 ```{r}
 
@@ -169,7 +166,8 @@ library(janitor)
 
 ### Task 3: Load Arnold, Maryland demonstration data
 **Task** Run the following codeblock to load a demonstration slice of the WinRed contribution data from Conowingo, Maryland. How many rows are in this demonstration data set?
-**Answer**
+
+**Answer** 14 rows.
 
 ```{r}
 conowingo <- read_rds("data/conowingo.rds")
@@ -177,7 +175,9 @@ conowingo <- read_rds("data/conowingo.rds")
 
 ### Task 4: Examine the data with glimpse
 **Task** Run the following codeblock to glimpse the data.  What data type is the "amount" field? Answer below.
-**Answer**
+
+**Answer** The `amount` field is a character. 
+
 ```{r}
 glimpse(conowingo)
 ```
@@ -186,7 +186,14 @@ And let's examine the full data set.
 
 ### Task 5: Examine the data table
 **Task** Run the following codeblock to examine the data. Name three problems the book chapter says exist in this data set that could prevent us from answering questions?  Answer below
-**Answer**
+
+**Answer** 
+
+1.    The amount column is stored as a character, not a number.
+
+2.    The city field has five different forms – including misspellings – of Arnold.
+
+3.    The zip field mixes five digit ZIP codes and nine digit ZIP codes.
 
 ```{r}
 conowingo
@@ -194,7 +201,8 @@ conowingo
 
 ### Task 6: Use clean_names()
 **Task** Run the following codeblock to use the `clean_names()` function from janitor to standardize column names. How does the function change the name of the column "1_linenumber"? Answer below. Add a description of what this code does to your reference notebook.
-**Answer**
+
+**Answer** `x1_linenumber`.
 
 
 ```{r}
@@ -220,7 +228,15 @@ cleaned_conowingo
 
 ### Task 8: Try summarizing the amount column
 **Task** Run the following codeblock to attempt to add up the amount of all contributions. What does the error say when you run this code? What do you think the error means? Answer below.
+
 **Answer**
+
+Error in `summarise()`:
+! Problem while computing `total_amount = sum(amount)`.
+Caused by error in `sum()`:
+! invalid 'type' (character) of argument
+
+We have asked the code to do a calculation using data that is in a format that does not allow for this calculation. We need this variable to be numeric, not character.  
 
 ```{r}
 # cleaning function
@@ -234,7 +250,8 @@ total_conowingo
 ```
 ### Task 9: Change data type for amount
 **Task** Run the following codeblock to attempt to change the datatype for the amount field to a number. What is the new data type (three letter code) for amount? Answer below.
-**Answer**
+
+**Answer** <dbl>
 
 ```{r}
 # cleaning function
@@ -243,14 +260,15 @@ cleaned_conowingo <- conowingo %>%
   rename(linenumber = x1_linenumber) %>% 
   mutate(amount = as.numeric(amount))
   
-
 # display the cleaned dataset
 cleaned_conowingo
 
 ```
 ### Task 10: Try again to summarize the amount column
 **Task** Run the following codeblock to add up the amount of all contributions in this data.  What is the total? Answer below.
-**Answer**
+
+**Answer** $226
+
 ```{r}
 # cleaning function
 total_conowingo <- cleaned_conowingo %>%
@@ -258,13 +276,12 @@ total_conowingo <- cleaned_conowingo %>%
 
 # display the cleaned dataset
 total_conowingo
-
-
 ```
 
 ### Task 11: Check for duplicate rows
 **Task** Run the following codeblock to check for duplicate rows using get_dupes().  How many are there? What is the donor name? Answer below.
-**Answer**
+
+**Answer** There is one set of duplicates in the data. The donor is Derrick Hamilton. 
 
 ```{r}
 cleaned_conowingo %>% 
@@ -273,7 +290,8 @@ cleaned_conowingo %>%
 
 ### Task 12: Check for duplicate rows
 **Task** Run the following codeblock to use distinct() to get rid of duplicate rows. How many rows does the new dataframe have? Answer below. Add a description of what this code does to your reference notebook.
-**Answer**
+
+**Answer** 13 rows. 
 
 ```{r}
 # cleaning function
@@ -283,15 +301,16 @@ cleaned_conowingo <- conowingo %>%
   mutate(amount = as.numeric(amount)) %>% 
   distinct()
   
-
 # display the cleaned dataset
 cleaned_conowingo
 
 ```
 
 ### Task 13: Clean up ZIP code
+
 **Task** Run the following codeblock to use str_sub() to convert the ZIP codes that have nine digits to five digits, standardizing the field. Look at the difference in the result - what changed?
-**Answer**
+
+**Answer** The ZIP code is now consistently the first five digits of whatever number was supplied. If inputted correctly, this should reflect the five digit ZIP code. 
 
 ```{r}
 # cleaning function
@@ -305,11 +324,13 @@ cleaned_conowingo <- conowingo %>%
 
 # display the cleaned dataset
 cleaned_conowingo
-
 ```
 
 ### Task 14: Clean up city field
+
 **Task** Run the following codeblock to use str_tot_title() to standarize capitalization in the "city" field. How many mispellings of Arnold remain after running this code? Answer below. Add a description of what this code does to your reference notebook.
+
+**Answer** There are two misspellings of Conowingo: Conowing and Conowingoo. 
 
 ```{r}
 # cleaning function
@@ -321,16 +342,15 @@ cleaned_conowingo <- conowingo %>%
   mutate(zip = str_sub(zip, start=1L, end=5L)) %>%
   mutate(city = str_to_title(city))
   
-
 # display the cleaned dataset
-cleaned_conowingo
-
+distinct(cleaned_conowingo, city)
 ```
 
 
 ### Task 15: Clean up city field more with case_when()
 **Task** Run the following codeblock to use case_when() to fix misspellings of Conowingo in the "city" field. How many mispellings of Conowingo remain after running this code? Answer below.
-**Answer**
+
+**Answer** Just one: Conowingoo. 
 
 ```{r}
 # cleaning function
@@ -347,13 +367,14 @@ cleaned_conowingo <- conowingo %>%
   ))
 
 # display the cleaned dataset
-cleaned_conowingo
-
+distinct(cleaned_conowingo, city)
 ```
 
 ### Task 16: Clean up city field more with case_when()
 **Task** Run the following codeblock to use case_when() to fix misspellings of Conowingo in the "city" field using both the exact match method and the str_detect() method. How many mispellings of Conowingo remain after running this code? Answer below. Add a description of what this code does to your reference notebook.
-**Answer**
+
+**Answer** None. 
+
 ```{r}
 # cleaning function
 cleaned_conowingo <- conowingo %>%
@@ -370,6 +391,5 @@ cleaned_conowingo <- conowingo %>%
   
 
 # display the cleaned dataset
-cleaned_conowingo
-
+distinct(cleaned_conowingo, city)
 ```
