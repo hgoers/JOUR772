@@ -15,9 +15,10 @@ knitr::opts_chunk$set(echo = TRUE)
 options(scipen=999)
 
 # Load the tidyverse here
+library(tidyverse)
 
 # Load janitor here
-
+library(janitor)
 ```
 
 ## Load data
@@ -25,7 +26,59 @@ options(scipen=999)
 # Write code to load MD slice of FEC House candidate contribution data and call it md_contribs.
 # The data is called lab_03.rds, and is in the data folder alongside lab_03.Rmd (this data notebook)
 
+md_contribs_raw <- rio::import(here::here("labs", "lab_03", "data", "lab_03.rds"))
+```
 
+## Clean data
+
+```{r}
+
+md_contribs <- md_contribs_raw |> 
+  mutate(contributor_city = str_to_title(contributor_city),
+         contributor_city = str_remove(contributor_city, "[^a-zA-Z\\d\\s:]"),
+         contributor_city = str_replace(contributor_city, "St ", "Saint "),
+         contributor_city = str_replace(contributor_city, "N ", "North "),
+         contributor_city = str_replace(contributor_city, "Mt ", "Mount"), 
+         contributor_city = str_replace(contributor_city, "Ft ", "Fort"), 
+         contributor_city = case_when(contributor_city == "11509 Lake Potomac Drive" ~ "Potomac",
+                                      contributor_city == "15600 Beech Tree Pkwy" ~ "Upper Marlboro",
+                                      contributor_city == "15616 Everglade Ln Apt 404" ~ "Bowie",
+                                      contributor_city == "Calfornia" ~ "California",
+                                      contributor_city == "Carvel Beacj" ~ "Carvel Beach",
+                                      contributor_city == "Churchvillechurchv" ~ "Churchville",
+                                      contributor_city == "Clearspring" ~ "Clear Spring",
+                                      contributor_city == "Chevy Chase Villag" ~ "Chevy Chase Village",
+                                      contributor_city == "Cpe St Claire" ~ "Cape St Claire",
+                                      contributor_city == "Fredericj" ~ "Frederick", 
+                                      contributor_city == "Gwynn Oak Balto Cty" ~ "Gwynn Oak", 
+                                      contributor_city == "Hannover" ~ "Hanover", 
+                                      contributor_city == "Highland Bch" ~ "Highland Beach", 
+                                      contributor_city == "Lanham Seabrook" ~ "Lanham", 
+                                      contributor_city == "Mc Henry" ~ "Mchenry", 
+                                      contributor_city == "Mount Ranier" ~ "Mount Rainier",
+                                      contributor_city == "Pocomoke" ~ "Pocomoke City", 
+                                      contributor_city == "Potamic" ~ "Potomac", 
+                                      contributor_city == "Prnc Frederck" ~ "Prince Frederick",
+                                      contributor_city == "Reistertown" ~ "Reisterstown", 
+                                      contributor_city == "Sandy Springs" ~ "Sandy Spring", 
+                                      contributor_city == "Uppr Marlboro" ~ "Upper Marlboro", 
+                                      contributor_city == "Westmiinster" ~ "Westminster", 
+                                      contributor_city == "Balitmore" ~ "Baltimore", 
+                                      contributor_city == "Ellicottcity" ~ "Ellicott City", 
+                                      str_detect(contributor_city, "A[n]*[a-z]*poli") ~ "Annapolis",
+                                      str_detect(contributor_city, "Beth[e]?s[d]?a") ~ "Bethesda",
+                                      str_detect(contributor_city, "Cock[e]?y[s]?vil") ~ "Cockeysville",
+                                      str_detect(contributor_city, "Gaithe[r]?sbur") ~ "Gaithersburg", 
+                                      str_detect(contributor_city, "Luth[er]*v") ~ "Timonium",
+                                      str_detect(contributor_city, "Mill[r]?e[r]?s") ~ "Millersville", 
+                                      str_detect(contributor_city, "S[l]?i[l]?ver Spring") ~ "Silver Spring",
+                                      TRUE ~ contributor_city), 
+         # Make all zips 5 digits
+         contributor_zip = str_sub(contributor_zip, 1, 5),
+         contributor_zip = recode(contributor_zip, 
+                                  `1773` = "01773", 
+                                  `2022` = "21224")) |> 
+  filter(contributor_city != "Needham") # In MA
 ```
 
 ## Answer questions
@@ -34,29 +87,43 @@ Q1: Which seven cities in Maryland had the largest _number_ of contributions fro
 
 Note: To answer this question, you'll need to see every variation of the "contributor_city" for the top seven cities, which you should identify through some initial analysis. Then find variations of them and change those variations into the most common version.
 
-A1:
 ```{r}
-
-# Write your code in this codeblock.
-
+q1 <- md_contribs |> 
+  group_by(contributor_city) |> 
+  summarise(n_contribs = n()) |> 
+  arrange(desc(n_contribs)) |> 
+  head(7)
 ```
 
-Q2: Find the 5-digit ZIP code in Maryland that had the highest total amount of contributions (by dollar value). Where is that zip code and what kind of area is it? Which committee is the largest recipient of money from that zip code? How many of the top five recipients are Maryland candidates?
+A1: The seven cities in Maryland had the largest number of contributions from donors are: `r pull(q1, contributor_city)`. The amount each had is provided in the table above. 
 
-A2:
+Q2: Find the 5-digit ZIP code in Maryland that had the highest total amount of contributions (by dollar value). Where is that zip code and what kind of area is it? Which committee is the largest recipient of money from that zip code? How many of the top five recipients are Maryland candidates?
 
 ```{r}
 # Hint
 # First, create a dataframe that shows the top 5-digit ZIP code by total dollar amount
 # Second, use the top ZIP code in the dataframe you just created and create a new dataframe that shows the committee that got the most money from that ZIP code.
 
+top_zip <- md_contribs |> 
+  group_by(contributor_zip) |> 
+  summarise(total_amount = sum(contribution_receipt_amount)) |> 
+  arrange(desc(total_amount)) |> 
+  head(1) |> 
+  pull(contributor_zip)
+
+top_committees <- md_contribs |> 
+  filter(contributor_zip == top_zip) |> 
+  group_by(committee_name) |> 
+  summarise(total_amount = sum(contribution_receipt_amount)) |> 
+  arrange(desc(total_amount)) |> 
+  head(5)
 ```
+
+A2: The 5-digit ZIP code in Maryland that had the highest total amount of contributions (by dollar value) was `r top_zip`. This zip code adjoins DC. It is considered to be a very affluent area. The top recipient from this zip code is `r top_committees |> head(1) |> pull(committee_name)`. Two of the top five recipients are from Maryland. 
 
 Q3: Let's look at top individual donors to House campaigns. Write code to generate a list of top donors using name and city, adding up the total amount of contributions. One of the top few donors has a very strong connection to the U.S. House - who is that and what does he do? How does his donation pattern differ from the second-largest donor, and what can you say about that second-largest donor?
 
 Feel free to add any interesting "color" (little interesting details) you find in your research.  
-
-A3:
 
 ```{r}
 
@@ -64,4 +131,63 @@ A3:
 # First, create a dataframe of top individual contributors
 # Second, use information from that dataframe to examine individual donations from the original md_contribs dataframe.
 
+top_two_donors <- md_contribs |> 
+  group_by(contributor_name, contributor_city) |> 
+  summarise(total_contribs = sum(contribution_receipt_amount)) |> 
+  arrange(desc(total_contribs)) |> 
+  head(2) |> 
+  pull(contributor_name)
+
+top_two_md_contribs <- md_contribs |> 
+  filter(contributor_name %in% top_two_donors) |> 
+  group_by(contributor_name, committee_name) |> 
+  summarise(total_contribs = sum(contribution_receipt_amount)) |> 
+  arrange(contributor_name, total_contribs) |> 
+  ungroup()
 ```
+
+```{r}
+library(networkD3)
+
+nodes <- tibble(name = c(top_two_md_contribs$contributor_name,
+                         top_two_md_contribs$committee_name)) |>
+  distinct(name) |> 
+  mutate(node_id = row_number() - 1)
+
+links <- md_contribs |> 
+  filter(contributor_name == "TRONE, DAVID") |> 
+  group_by(source = contributor_name, target = committee_name) |> 
+  summarise(value = sum(contribution_receipt_amount)) |> 
+  bind_rows(
+    md_contribs |>
+      filter(contributor_name == "MASON, JUANITA") |>
+      group_by(source = contributor_name, target = committee_name) |>
+      summarise(value = sum(contribution_receipt_amount))
+  ) |> 
+  ungroup() |> 
+  left_join(nodes, by = c("source" = "name")) |> 
+  select(source = node_id, target, value) |> 
+  left_join(nodes, by = c("target" = "name")) |> 
+  select(source, target = node_id, value)
+
+sankeyNetwork(Links = links, 
+              Nodes = nodes, 
+              Source = "source",
+              Target = "target", 
+              Value = "value", 
+              NodeID = "name")
+```
+
+```{r}
+n_trone <- top_two_md_contribs |> filter(contributor_name == "TRONE, DAVID") |> summarise(n())
+avg_trone <- top_two_md_contribs |> filter(contributor_name == "TRONE, DAVID") |> summarise(mean(total_contribs)) |> pull() |> scales::dollar()
+min_trone <- top_two_md_contribs |> filter(contributor_name == "TRONE, DAVID") |> summarise(min(total_contribs)) |> pull()
+
+n_mason <- top_two_md_contribs |> filter(contributor_name == "MASON, JUANITA") |> summarise(n())
+avg_mason <- top_two_md_contribs |> filter(contributor_name == "MASON, JUANITA") |> summarise(mean(total_contribs)) |> pull() |> scales::dollar()
+min_mason <- top_two_md_contribs |> filter(contributor_name == "MASON, JUANITA") |> summarise(min(total_contribs)) |> pull()
+```
+
+A3: The largest Maryland donor to political campaigns is Congressman David Trone. Trone, a Democrat, is a member of the House of Representatives. He serves on the serves on the House Appropriations and Veterans’ Affairs Committees and the Joint Economic Committee. 
+
+Trone concentrates his support to a handful of Democrat campaigns. This concentration is particularly stark when you compare his contributions to those of the second largest Maryland donor: Juanita Mason. Trone donated to `r n_trone` campaigns, providing an average of `r avg_trone` to each campaign. Mason, on the other hand, donated to `r n_mason` (largely Republican) campaigns, contributing an average of `r avg_mason` to each. In fact, the smallest amount Trone contributed to a campaign was `r scales::dollar(min_trone)`, `r min_trone / min_mason` times higher than Mason's smallest contribution of `r scales::dollar(min_mason)`.
