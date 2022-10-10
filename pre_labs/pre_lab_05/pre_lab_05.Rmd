@@ -34,8 +34,8 @@ library(refinr)
 ```
 
 ### Task 3: Load data
+
 **Task** Run the following code to load some campaign expenditure data focused on food-related expenses in Washington, D.C.
-**Answer**
 
 ```{r}
 # Load data
@@ -43,12 +43,13 @@ dc_food <- read_csv("data/dc_food.csv")
 
 # Display it
 dc_food
-
 ```
 
 ### Task 4: Group and count to identify problems in city column
+
 **Task** Run the following code to group and count records in the recipient_name column, and filter to examine only recipients that start with W. Name a problem that you see that is preventing proper grouping.
-**Answer**
+
+**Answer** Different spelling for the same recipient. 
 
 ```{r}
 # Now let's try and group and count the number of expenditures by recipient. To make it a bit more manageable, let's use another string function from `stringr` and filter for recipients that start with the uppercase "W" or lowercase "w" using the function `str_detect()` with a regular expression.  
@@ -65,21 +66,25 @@ dc_food %>%
 ```
 
 ### Task 5: Use refinr to clean the city_clean field.
+
 **Task** Run the following code to make a copy of the recipient_name field called recipient_clean, then use the `key_collision_merge` function from refinr to attempt to standarize similar values. Store it as a new object called cleaned_dc_food.  Click the black arrow on the table to examine the recipient_name and recipient_clean columns.  Looking at the results on the first two pages only (first 20 rows), name two changes the refinr package made, by comparing recipient_name to recipient_clean.
-**Answer**
+
+**Answer** JOE'S SEAFOOD PRIME STEAK & STONE CRAB to JOE'S SEAFOOD, PRIME STEAK & STONE CRAB, and LE DIPLOMATE, LE DIPLOMATE to LE DIPLOMATE. 
 
 ```{r}
 cleaned_dc_food <- dc_food %>%
   mutate(recipient_clean=key_collision_merge(recipient_name)) %>%
-  select(recipient_name, recipient_clean, everything())
+  relocate(recipient_name, recipient_clean)
 
-cleaned_dc_food
-
+cleaned_dc_food |> 
+  filter(recipient_name != recipient_clean)
 ```
 
 ### Task 6: Filter cleaned_dc_food to examine recipients that start with W
+
 **Task** Run the following code to group by recipient_clean and recipient_name, then filter for cities that start with W. Name three changes the refinr function made in the first 20 results.
-**Answer**
+
+**Answer** W. MILLAR & CO to W. MILLAR & CO., WALTER'S SPORTS BAR to WALTERS SPORTS BAR, HILTON WASHINGTON to WASHINGTON HILTON. 
 
 ```{r}
 cleaned_dc_food %>%
@@ -88,29 +93,25 @@ cleaned_dc_food %>%
     count=n()
   ) %>%
   filter(str_detect(recipient_clean, "^w|^W")) %>%
-  arrange(recipient_clean)
+  arrange(recipient_clean) |> 
+  filter(recipient_name != recipient_clean)
 ```
+
 ### Task 7: Use a different refinr method to clean the city_clean field.
+
 **Task** Run the following code to use the n_gram_merge() function to clean the data, then group by city_clean and city to examine cities that start with A. Look at the differences. Does the changes it made vary substantially from the previous use of key_collision_merge?
-**Answer**
+
+**Answer** These methods largely result in the same cleaned names. Only two percent of all names are different. 
 
 ```{r}
-cleaned_dc_food <- dc_food %>%
-  mutate(recipient_clean=n_gram_merge(recipient_name)) %>%
-  select(recipient_name, recipient_clean, everything())
-
-cleaned_dc_food
-
-
-cleaned_dc_food %>%
-  group_by(recipient_name, recipient_clean) %>%
-  summarise(
-    count=n()
-  ) %>%
-  filter(str_detect(recipient_clean, "^w|^W")) %>%
-  arrange(recipient_clean)
-
-
+dc_food |> 
+  mutate(recipient_clean_kc = key_collision_merge(recipient_name), 
+         recipient_clean_ng = n_gram_merge(recipient_name),
+         kc_ng_same = if_else(recipient_clean_kc == recipient_clean_ng, 1, 0)) |> 
+  group_by(kc_ng_same) |> 
+  summarise(n = n()) |> 
+  mutate(prop = scales::percent(n / sum(n)))
 ```
 ### Task 8: Follow the directions in the textbook to use Open Refine
+
 **Task** Follow the directions in the textbook to upload dc_food.csv to Open Refine (https://dwillis.github.io/data_journalism_book/open-refine.html#manually-cleaning-data-with-open-refine). Follow the instructions to clean as many recipients as the Open Refine clustering tool can identify. In class, I will come around to look at the Open Refine project you created to do this.
