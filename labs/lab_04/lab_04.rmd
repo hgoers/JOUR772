@@ -1,0 +1,134 @@
+---
+title: "lab_04"
+author: "derek willis"
+date: "8/11/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries and establish settings
+```{r}
+library(tidyverse)
+library(janitor)
+library(rio)
+```
+
+## Getting Started
+
+This week we'll be combining and joining data to make it more useful and to ask some questions about it. We'll use Maryland 2022 primary precinct election results to do this, and our main question will be this: Which precincts had the most votes cast at them statewide, counting both the Republican and Democratic primaries? To answer this question, we'll need to first combine the two parties' primary precinct results into a single dataframe and then join it to data that has more information about each voting location.
+
+First, load the two precinct results CSV files in the `data` folder, one each for the Democratic and Republican primaries, and then combine them into a single dataframe using the method we used in the pre_lab. You'll need to clean up the column names to make the data easier to work with - make sure you have loaded the library to do that.
+
+```{r}
+precinct_all <- import(here::here("labs", "lab_04", "data", "md_primary_precinct_dem.csv")) |> 
+  clean_names() |> 
+  bind_rows(
+    import(here::here("labs", "lab_04", "data", "md_primary_precinct_rep.csv")) |>
+      clean_names()
+  )
+```
+
+Next, let's read in the precinct voting location data and make sure you clean up the column names:
+
+```{r}
+precinct_loc <- import(here::here("labs", "lab_04", "data", "precinct_voting_locations.csv")) |> 
+  clean_names()
+```
+
+These two dataframes have a pair of columns in common - not necessarily with the same column names. Join the two dataframes on that unique combination that describes a precinct and the jurisdiction that contains it:
+
+```{r}
+precinct_all_loc <- precinct_all |> 
+  mutate(election_district_precinct = as.character(election_district_precinct)) |> 
+  left_join(precinct_loc, by = c("election_district_precinct" = "precinct_code", "county" = "county_code"))
+```
+
+## Answer questions
+
+Q1. Using the newly-created dataframe and isolating just the results for Wes Moore and Aruna Miller, write code that calculates how many voting locations each county has, showing the county with the most voting locations first. There's a catch: multiple precincts can share the same voting location, so you'll need to calculate the distinct number of locations (Google is your friend).
+
+```{r}
+precinct_all_loc |> 
+  filter(candidate_name == "Wes Moore and Aruna Miller") |> 
+  group_by(county, county_name) |> 
+  distinct(location_name) |> 
+  summarise(n_locations = n()) |> 
+  arrange(desc(n_locations))
+```
+
+Does the county with the most voting locations have the largest population in the state (ask yourself: where have you seen county population figures recently)?
+
+A1. No, Montgomery county had the largest population in 2020. 
+
+Q2. Write code to produce a `votes` column which is the result of adding together `early_votes`, `election_night_votes`, `provisional_votes` and the mail-in votes, overwriting your dataframe so that it now has that `total_votes` column going forward. Then, separately write code to show each county and precinct and calculate the total votes in the Governor's race - bearing in mind that each precinct will have multiple rows in the dataframe, but you only want to see one row for each precinct. What is the name and voting location of the precinct that saw the most votes in the governor's race? 
+
+```{r}
+precinct_all_loc <- precinct_all_loc |> 
+  rowwise() |> 
+  mutate(total_votes = sum(early_votes, election_night_votes, provisional_votes))
+
+gov_race <- precinct_all_loc |> 
+  filter(office_name == "Governor / Lt. Governor") |> 
+  group_by(county_name, election_district_precinct, location_name) |> 
+  summarise(total_votes = sum(total_votes)) |> 
+  arrange(desc(total_votes)) |> 
+  ungroup()
+
+gov_race
+```
+
+A2. The name and voting location of the precinct that saw the most votes in the governor's race is `r gov_race |> head(1) |> pull(location_name)` in `r gov_race |> head(1) |> pull(county_name)`.
+
+Q3. Let's look at the average number of votes in each party's primary race for governor. Take the code you wrote for the last part of Q2, save the results to a new variable and then find the precincts with 0 total votes for governor. 
+
+*How many precincts are there, and which county has the most?* There are `r gov_race |> filter(total_votes == 0) |> summarise(n())` precincts. `r gov_race |> group_by(county_name) |> filter(total_votes == 0) |> summarise(n = n()) |> filter(n == max(n)) |> pull(county_name)` has the most. 
+
+*What else would you need to know about these precincts to know whether this might be worth a story?* Whether these precincts represent the only accessible precinct for any MD residents. Or, whether these precincts have a history of no turn-out. 
+
+Finally, write code to calculate the average and median number of total votes across all precincts statewide (so you want to see just two numbers - the average and median). To do this, you will need to use the `ungroup()` function on your new dataframe _before_ you do the math - https://www.rdocumentation.org/packages/multiplyr/versions/0.1.1/topics/ungroup. There's no state column here, so you aren't grouping by anything, but can still use summarize to do the math.
+
+```{r}
+precinct_all_loc |> 
+  ungroup() |> 
+  summarise(average = mean(total_votes), median = median(total_votes))
+```
+
+Take a look at the the Annotated Code of Maryland's election laws (https://mgaleg.maryland.gov/2023RS/Statute_Web/gel/gel.pdf) - can you find a limit on the number of voters assigned to a precinct? How might your answer impact wait times to vote?
+
+A3. No, there is no limit to the number of voters assigned to a precinct. Precincts in densely populated areas will likely have long wait times. 
+
+Q4. Choose your own adventure: I want you to come up with a question you could ask of one of the dataframes we've created for this lab. It could involve candidates, or counties or types of voting, but it cannot be a variation of a previous question (so, for example, you can't ask, "What's the average number of votes per precinct in the U.S. Senate primary?"). First write the question and then try to answer it by writing code. If you're not sure of the exact code, try googling (or ask me or Ramsay for advice) but, at a minimum, describe what you think you'd have to do to answer it and what the results would look like. That can help.
+
+A4: How do precincts differ in their use of public buildings on election day? Differences by precinct could demonstrate a diversity of ways that communities interact with one another. If election polling booths tend to be in places that are most accessible to the community, offer space for large gatherings, and are available for public use, they may serve as a good proxy for understanding better how individuals at the community level comfortably interact with one another and their government. At a more basic level, these accessible locations perhaps demonstrate the geographic focal point of the community. They may indicate a central point around which the community built and developed. 
+
+To do this analysis, I would map out the locations and colour by type to get a better sense of the geography of the community. However, the Google API now requires a subscription. My usual method for getting latitude and longitudes from addresses (`ggmap`) is, therefore, a bit too cumbersome. Below is a more simple representation of the differences.
+
+```{r}
+type_building <- precinct_loc |> 
+  mutate(location_name = str_to_lower(location_name),
+         type = case_when(str_detect(location_name, "fire") ~ "Emergency services building",
+                          str_detect(location_name, "emergency") ~ "Emergency services building",
+                          str_detect(location_name, "school") ~ "School",
+                          str_detect(location_name, " es ") ~ "School",
+                          str_detect(location_name, " ms ") ~ "School",
+                          str_detect(location_name, " hs ") ~ "School",
+                          str_detect(location_name, "college") ~ "College/university",
+                          str_detect(location_name, "library") ~ "Library",
+                          str_detect(location_name, "church") ~ "Religious building", 
+                          TRUE ~ "Other")) 
+
+
+type_building |> 
+  group_by(county_code, type) |> 
+  summarise(n = n()) |> 
+  ggplot(aes(x = n, y = type)) + 
+  geom_col() + 
+  facet_wrap(~ county_code) + 
+  theme_minimal() + 
+  labs(x = "Number of buildings", 
+       y = NULL)
+```
+
