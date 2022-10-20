@@ -1,0 +1,247 @@
+---
+title: "lab_06"
+author: "derek willis"
+date: "10/18/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## You will need
+
+* Tabula
+
+## Load libraries and establish settings
+```{r}
+# Turn off scientific notation
+options(scipen=999)
+
+# Load the libraries you will need
+library(tidyverse)
+library(janitor)
+```
+
+## Get Our PDF
+
+We'll be working with the [Maryland monthly voter registration update](https://elections.maryland.gov/pdf/vrar/2022_09.pdf) from the State Board of Elections. You'll want to download it to a place you'll remember (like your Downloads folder, or the labs folder in your repository). The goal is to write a couple of paragraphs that summarize the changes in voter registration in Maryland during the month of September.
+
+## Setup Tabula
+
+Start Tabula, then go to http://127.0.0.1:8080/ in your browser. Click the "Browse" button and find the PDF file and click "open", and then click the "Import button" in Tabula. This will take a few seconds.
+
+This PDF has multiple possible tables to extract. We're going to make four dataframes: new registrations by party, removals by party, changes in registration and current registrations by county. You will need to draw boxes around four sections and export four CSV files that you will load into R. In Tabula, draw a box around the borders of those tables and click the "Preview & Export Extracted Data" button for each one. The export should look pretty clean.
+
+Export each CSV (each one should be called `tabula-2022-09.csv` by default, so you should rename them for clarity) to your lab_06/data folder.
+
+From there, you will need to read in and clean up the data, and in particular the headers. You can choose to include the headers from the PDF in your exported CSV files OR to exclude them and add them when importing. `read_csv` allows us to do this ([and more](https://readr.tidyverse.org/reference/read_delim.html)).
+
+## Load and clean up the data in R
+
+You will need to read in and clean up the data so that it can be used for analysis. By "clean" I mean the column headers should not contain spaces and they should have meaningful names, not "x1" or something similar. The current registrations dataframe *MUST* include the county name, but should not include the columns under `Changes` and `Party Affiliation From`. How you do that is up to you (and could involve something outside R), but you can use select() with or without the minus sign to include or exclude certain columns. You also can use the `rename` function to, well, rename columns.
+
+```{r}
+clean_data <- function(file_name) {
+  
+  rio::import(here::here("labs", "lab_06", "data", file_name)) |>
+    clean_names() |>
+    rename(summary = v1) |> 
+    mutate(across(!summary, ~ as.numeric(str_remove(.x, "[^0-9.]"))))
+  
+}
+```
+
+```{r}
+# Party registrations
+
+party_rego_2022 <- clean_data("new_rego_by_party.csv")
+party_rego_2022
+```
+
+```{r}
+# Removals
+
+removals_2022 <- clean_data("removals.csv")
+removals_2022
+```
+
+```{r}
+# Changes
+
+changes_2022 <- clean_data("party_aff_total_active.csv") |> 
+  select(county = summary, address:total)
+changes_2022
+```
+
+```{r}
+# Current registrations
+
+current_rego_2022 <- clean_data("party_aff_total_active.csv") |> 
+  select(county = summary, dem_2:total_2) |> 
+  rename_with(~ str_remove_all(.x, "_2"), contains("_2"))
+current_rego_2022
+```
+
+## Rinse, Repeat: September 2020 data
+
+Do all of that again, for the [September 2020 voter registration update](https://elections.maryland.gov/pdf/vrar/2020_09.pdf), so we can compare the two. If you've done well, this is easy: just do the same steps in Tabula, export the files and use the same code to read in and clean up the data, *just remember to give these dataframes different names*, although similar enough so that you know how to compare September 2022 to September 2020.
+
+To answer the following questions, you'll need to calculate percentages and do other calculations. Whether you do that by combining or joining dataframes or you write code to run separately on both is up to you.
+
+```{r}
+# Party registrations
+
+party_rego_2020 <- clean_data("new_rego_by_party_2020.csv")
+party_rego_2020
+```
+
+```{r}
+# Removals
+
+removals_2020 <- clean_data("removals_2020.csv")
+removals_2020
+```
+
+```{r}
+# Changes
+
+changes_2020 <- clean_data("party_aff_total_active_2020.csv") |> 
+  select(county = summary, address:total)
+changes_2020
+```
+
+```{r}
+# Current registrations
+
+current_rego_2020 <- clean_data("party_aff_total_active_2020.csv") |> 
+  select(county = summary, dem_2:total_2) |> 
+  rename_with(~ str_remove_all(.x, "_2"), contains("_2"))
+current_rego_2020
+```
+
+
+## Answer questions
+
+Q1. Calculate the percentage of registered Democrats, Republicans and unaffiliated voters for the entire state in September 2022 and September 2020, and then calculate the percentage change for those three party categories (the formula for percentage change is easy to remember: (New-Old)/Old). How would you describe the changes in these partisan categories in a story? What's the most interesting thing about these changes that would be the lede of that story?
+
+```{r}
+current_rego <- current_rego_2022 |> 
+  mutate(year = 2022) |> 
+  bind_rows(mutate(current_rego_2020, year = 2020))
+
+party_year <- current_rego |> 
+  group_by(year) |> 
+  summarise(dem = sum(dem),
+            rep = sum(rep),
+            unaf = sum(unaf)) |> 
+  pivot_longer(dem:unaf, names_to = "party", values_to = "total") |> 
+  arrange(party, year)
+
+party_year
+```
+
+```{r}
+party_year |> 
+  group_by(party) |> 
+  mutate(growth = scales::percent((total - lag(total)) / lag(total), accuracy = 0.01))
+```
+
+A1. Both major parties saw a fall in the number of affiliated registered voters in Maryland between 2020 and 2022. The number of unaffiliated registered voters grew substantially. Who are these unaffiliated voters? Are they newly registered voters, or are they voters who have changed their party affiliation? How will Republicans and/or Democrats target these unaffiliated voters? 
+
+Q2. Among the Maryland jurisdictions with the most registered voters, which one had the biggest percentage increase in unaffiliated voters between 2020 and 2022? How did that county vote for governor in 2018 and for president in 2020? Contrast the partisan percentages of that county with the county that had the second-largest percentage increase in unaffiliated voters. You should display information from the data that shows the counties with the largest percentage increase first.
+
+```{r}
+
+current_rego |> 
+  arrange(county, year) |> 
+  group_by(county) |> 
+  transmute(county, year, unaf, growth = (unaf - lag(unaf)) / lag(unaf) * 100) |> 
+  drop_na() |> 
+  ggplot(aes(x = growth, y = reorder(county, growth))) + 
+  geom_col() + 
+  theme_minimal() + 
+  theme(plot.title.position = "plot") +
+  labs(title = "Percentage change in unaffiliated voters between 2020 and 2022 by county",
+       x = "Percentage change (%)",
+       y = NULL)
+```
+
+```{r}
+current_rego |> 
+  filter(county %in% c("DORCHESTER", "KENT"), year == 2022) |> 
+  select(-total) |> 
+  pivot_longer(dem:bar, names_to = "party", values_to = "total") |> 
+  ggplot(aes(x = total, y = reorder(party, total), fill = county)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+  theme_minimal()
+```
+
+A2. Dorchester county voted overwhelmingly for Larry Hogan (R) in the 2018 Governor race and Donald Trump (R) in the 2020 Presidential election. 
+
+Q3. Do the party percentages of new registrants (% Dem, % Rep, % Unaffiliated) from September 2022 and September 2020 match the overall percentage of partisan registration in the state at those times?
+
+In other words, did new registrants mirror the overall partisan composition of the electorate, or were they different? Do any of the methods of registration vary significantly from the overall partisan pattern? Which method is worthy of further exploration?
+
+```{r}
+party_rego_2020 |> 
+  mutate(year = 2020, type = "new") |> 
+  bind_rows(mutate(party_rego_2022, year = 2022, type = "new")) |>
+  bind_rows(mutate(current_rego, type = "overall")) |> 
+  select(-total, -dups) |> 
+  pivot_longer(dem:oth, names_to = "party", values_to = "total") |> 
+  group_by(type, party, year) |> 
+  summarise(total = sum(total)) |> 
+  group_by(year, type) |> 
+  mutate(total = replace_na(total, 0),
+         prop = total / sum(total) * 100) |> 
+  ggplot(aes(x = prop, y = reorder(party, prop), fill = type)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+  facet_wrap(~ year) + 
+  theme_minimal()
+```
+
+A3. As the above chart demonstrates, new voters are disproportionately registering as unaffiliated with any party in both 2020 and 2022. This is worth exploring. 
+
+Q4. Choose your own adventure! Using both the 2022 and 2020 data for one of the dataframes (changes, removals or new registrations), ask and answer a question that makes at least one comparison and requires code to answer. That could involve calculating a percentage, percentage change or the raw difference between two columns.
+
+```{r}
+
+# Read in total registered voters by county two months prior
+current_rego_07 <- rio::import(here::here("labs", "lab_06", "data", "total_active_072020.csv")) |> 
+  mutate(year = 2020) |> 
+  bind_rows(
+    rio::import(here::here("labs", "lab_06", "data", "total_active_072022.csv")) |> 
+      mutate(year = 2022)
+  ) |> 
+  clean_names() |> 
+  select(-total) |> 
+  pivot_longer(-year, names_to = "party", values_to = "total") |> 
+  mutate(party = if_else(!party %in% c("dem", "rep", "unaf"), "other", party),
+         total = replace_na(total, 0)) |> 
+  group_by(party, year) |>
+  summarise(total_registered = sum(total))
+
+removals_2020 |> 
+  mutate(year = 2020) |> 
+  bind_rows(mutate(removals_2022, year = 2022)) |> 
+  select(-total) |> 
+  pivot_longer(dem:oth, names_to = "party", values_to = "total_removed") |> 
+  filter(summary == "MOVED OUT OF STATE") |>
+  mutate(party = if_else(!party %in% c("dem", "rep", "unaf"), "other", party),
+         total_removed = replace_na(total_removed, 0)) |> 
+  group_by(party, year) |>
+  summarise(total_removed = sum(total_removed)) |> 
+  left_join(current_rego_07) |> 
+  mutate(prop = total_removed / total_registered * 100) |> 
+  ggplot(aes(x = year, y = prop, colour = party)) + 
+  geom_line() + 
+  geom_point() + 
+  theme_minimal()
+```
+
+A4. I am interested in understanding whether those who are moving out of Maryland are disproportionately affiliated with one party. To explore this, I needed the proportion of a party's registered voters who have moved interstate. I have lagged the total number of registered voters by two months to account for delays people may have in registering their changed circumstances. Although this research design could use a lot of work (and robustness checks!), I have found some interesting routes for further enquiry. First, between 2020 and 2022, the proportion of people moving out of state declined across all parties. Second, the rate of Democrats and all parties other than Democrats, Republicans, or unaffiliated declined at roughly the same rate. Republicans, who were the most to move in 2020, tended to stay in 2022. To really unpack this question, I would need far more data. I would need to get monthly moving data across several years. I suspect I would need to control for various seasonal and economic factors that prompt people to move states. Perhaps these factors do significantly differ by party. If so, there might be an interesting story to tell. 
+
+Q5. What's the best story idea or question you've seen as a result of the work you've done in this lab?
+
+A5. The incredible growth in unaffiliated voters. It would be interesting to explore who these people are and why they are registering as unaffiliated. It would also be interesting to see how they vote in future elections and whether they re-register with a party. 
