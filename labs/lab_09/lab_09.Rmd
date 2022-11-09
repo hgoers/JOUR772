@@ -1,0 +1,145 @@
+---
+title: "lab_09"
+author: "Derek Willis"
+date: "11/09/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## You will need
+
+* the tidyverse, janitor and tigris libraries
+* you might choose to use the tidycensus library for Q4
+
+## Load libraries and establish settings
+
+**Task** Create a codeblock and load appropriate packages and settings for this lab.
+
+```{r}
+# Turn off scientific notation
+options(scipen=999)
+
+# Load libraries
+library(tidyverse)
+library(tigris)
+library(sf)
+```
+
+Let's explore the election results from last night and make some maps! 
+
+## Questions 
+
+**Q1.** Make a county-level map of Maryland's results for governor using `md_gov_county.csv` in the data folder, calculating the difference between Wes Moore's percentage of the total votes and Dan Cox's percentage of the total votes and displaying that percentage difference on the map. What is the story here, and what is the county with the most interesting results?
+
+**A1.** Our old friend Garrett heavily supports Cox. 
+
+```{r}
+md_gov_county <- rio::import(here::here("labs", "lab_09", "data", "md_gov_county.csv")) |> 
+  janitor::clean_names() |> 
+  rowwise() |> 
+  mutate(total = sum(across(cox:write_ins)),
+         prop_moore = moore / total,
+         prop_cox = cox / total,
+         diff = prop_moore - prop_cox)
+
+counties <- counties()
+
+counties |> 
+  transmute(geoid = as.numeric(GEOID),
+            state = STATEFP) |> 
+  filter(state == "24") |> 
+  left_join(md_gov_county) |> 
+  ggplot() + 
+  geom_sf(aes(fill = diff)) + 
+  theme_void() + 
+  theme(legend.position = "bottom") + 
+  labs(title = "Counties bordering DC are stronger supporters of Moore than Cox",
+       fill = "Difference in vote percent")
+```
+
+**Q2.** Make another map showing the difference between Dan Cox's county-level performance in 2022 and Larry Hogan's in 2018, using percentages to compare the two as you did in Q1. You can use the dataframe you initially loaded for Q1, and you'll need to load the 2018 governor results in the data folder and join them to it before proceeding. Are there any counties where Cox got a higher percentage than Hogan? How would you describe the map showing the Hogan-Cox difference?
+
+Also answer this: is a map the best way to present this data? What else could you make that might convey more information?
+
+**A2.** 
+
+```{r}
+md_gov_county_18 <- rio::import(here::here("labs", "lab_09", "data", "md_gov_county_18.csv")) |> 
+  janitor::clean_names() |> 
+  rowwise() |> 
+  transmute(geoid, 
+            total = sum(across(hogan:write_ins)),
+            prop_hogan = hogan / total) |> 
+  left_join(select(md_gov_county, geoid, county, prop_moore)) |> 
+  mutate(diff = prop_moore - prop_hogan)
+
+counties |> 
+  transmute(geoid = as.numeric(GEOID),
+            state = STATEFP) |> 
+  filter(state == "24") |> 
+  left_join(md_gov_county_18) |> 
+  ggplot() + 
+  geom_sf(aes(fill = diff)) + 
+  theme_void() + 
+  theme(legend.position = "bottom") + 
+  labs(title = "Counties bordering DC a possibly more stalwart Democratic voters",
+       fill = "Difference in vote percent")
+```
+
+**Q3** Which county has the highest percentage of mail ballots remaining to be counted? Using the `mail_remaining.csv` file in the data folder, calculate the percentage of mail ballots remaining, then map a county map of those percentages. Looking at both the map and the data, are there counties where the candidate currently leading the governor's race could, in theory, change?
+
+```{r}
+mail_remaining <- rio::import(here::here("labs", "lab_09", "data", "mail_remaining.csv")) |> 
+  janitor::clean_names() |> 
+  mutate(perc = counted / total_returned)
+```
+
+```{r}
+library(ggalt)
+
+md_gov_county |>
+  pivot_longer(cox:moore, names_to = "candidate", values_to = "current_count") |> 
+  select(geoid, county, candidate, current_count, current_total = total) |> 
+  mutate(current_prop = current_count / current_total) |> 
+  left_join(select(mail_remaining, geoid, remaining)) |> 
+  mutate(total = current_total + remaining,
+         pot_prop = (current_count + remaining) / total) |> 
+  ggplot(aes(y = county, x = current_prop, xend = pot_prop, colour = candidate)) + 
+  geom_dumbbell() +
+  theme_minimal() + 
+  theme(legend.position = "top") + 
+  labs(title = "X",
+       x = "Proportion of vote won",
+       y = NULL,
+       colour = NULL)
+```
+
+**A3** I want to be able to highlight the overlapping counties more. Make them pop out and draw people's attention. I'm not sure how to do it.
+
+**Q4.** Choose your own map adventure! In the data folder I've included county-level results for several other 2022 contests, including the Comptroller, Attorney General and the marijuana legalization amendment. I've also added the 2020 presidential results by county. Using one of the 2022 races that we haven't already used and at least one other contest for comparison, make a county-level map showing what you think is the most interesting aspect of that data, and describe the results in terms of a possible story. You can bring in other data, such as Census information, if you like.
+
+**A4.**  
+
+```{r}
+weed_df <- rio::import(here::here("labs", "lab_09", "data", "md_marijuana_county.csv")) |> 
+  janitor::clean_names() |>
+  mutate(total = `for` + against,
+         prop_for = `for` / total)
+
+counties |> 
+  transmute(geoid = as.numeric(GEOID),
+            state = STATEFP) |> 
+  filter(state == "24") |> 
+  left_join(weed_df) |> 
+  ggplot() + 
+  geom_sf(aes(fill = prop_for)) + 
+  theme_void() + 
+  theme(legend.position = "bottom") + 
+  labs(title = "Garret County the only MD county with minority vote to legalise weed",
+       fill = NULL)
+```
+
+-30-
