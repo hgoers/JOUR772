@@ -1,0 +1,237 @@
+---
+title: "Nevada Parties Profile Assignment"
+author: "Harriet Goers"
+format: 
+  html:
+    self-contained: true
+execute: 
+  echo: false
+  message: false
+  warning: false
+---
+
+```{r libraries}
+library(tidyverse)
+library(rio)
+library(janitor)
+library(sf)
+library(scales)
+library(lubridate)
+library(patchwork)
+library(USAboundaries)
+```
+
+```{r data}
+# Receipts data
+receipts <- import(here::here("major_assignments", "state_party_profile", "data-raw", "schedule_a-2022-12-15T10_33_28.csv")) |> 
+  clean_names() |> 
+  mutate(committee_name_clean = case_when(committee_name == "NEVADA REPUBLICAN CENTRAL COMMITTEE" ~ "NRCC",
+                                          committee_name == "NEVADA STATE DEMOCRATIC PARTY" ~ "NSDP",
+                                          committee_name == "NEVADA DEMOCRATIC VICTORY" ~ "NDV"))
+
+# Spending data
+spending <- import(here::here("major_assignments", "state_party_profile", "data-raw", "schedule_b-2022-12-15T10_32_16.csv")) |> 
+  clean_names() |> 
+  mutate(committee_name_clean = case_when(committee_name == "NEVADA REPUBLICAN CENTRAL COMMITTEE" ~ "NRCC",
+                                          committee_name == "NEVADA STATE DEMOCRATIC PARTY" ~ "NSDP",
+                                          committee_name == "NEVADA DEMOCRATIC VICTORY" ~ "NDV"))
+
+# US shapefile
+states_sf <- us_states()
+
+```
+
+```{r helpers}
+theme_custom <- function() {
+  
+  theme_minimal() + 
+  theme(panel.grid = element_blank(),
+        plot.title.position = "plot",
+        plot.title = element_text(face = "bold"),
+        legend.position = "bottom")
+  
+}
+```
+
+Nevada remains a purple state, with a narrow Democratic victory in the Senate. Democrats outperformed expectations in this election, fighting off the red wave anticipated by some political pundits. However, their victory in Nevada did not follow this trend. In fact, Governor Steve Sisolak was the only incumbent Democratic governor to lose his seat in this election. The party apparatice that sat behind Democrats in this election was divided between the establishment and more progressive or activist elements of the Demcratic Party. 
+
+In 2021, members of the Democratic Socialists of America were [elected to every leadership position in the Nevada State Democratic Party](https://theintercept.com/2021/03/08/nevada-democratic-party-dsa/). Seeing the writing on the wall, soon to be ousted members of the establishment sought to cut the legs out from below the Party. They [sent the entire Party treasury to the Democratic Senatorial Campaign Committee (DSCC)](https://thenevadaindependent.com/article/say-goodbye-to-the-most-effective-democratic-party-in-the-country), a national committee focused on Senate races. Following the election, they formed a separate committee: Nevada Democratic Victory. They supported establishment candidates, including the victorious Governor Cortez Masto and the unsuccessful Sisolak. 
+
+What were the electoral campaign consequences of this division? We will explore differences between these two faction's receipts and spending over the course of the 2021-2022 Senate and House campaigns. We will also examine how their behaviour compares to that of the Nevada Republican Central Committee. 
+
+I think the most interesting differences sit in individual donations. The differences between the three major committees - Nevada Republican Central Committee, Nevada State Democratic Party, and Nevada Democratic Victory - are stark. These differences prompt interesting questions about the way these committees connected to voters and mobilized supporters. 
+
+## From where did each committee get its funding?
+
+```{r}
+indiv_contribs <- receipts |> 
+  count(committee_name, committee_name_clean, entity_type_desc) |> 
+  filter(entity_type_desc == "INDIVIDUAL")
+```
+
+The Nevada Republican Central Committee attracted the largest number of individual donors of the major parties' committees in Nevada. Interestingly, they received donations from nearly twice as many people as the Nevada State Democratic Party and Nevada Democratic Victory committees combined. It would be good to explore whether the Republican committee consistently mobilizes a higher number of donors, or if this was an unusual year.
+
+```{r}
+ggplot(indiv_contribs, aes(x = n, y = reorder(committee_name_clean, n), label = n)) + 
+  geom_col() + 
+  geom_text(hjust = 1.2, colour = "white") + 
+  theme_custom() + 
+  labs(title = "The Republicans attract nearly twice as many individual donations than the \nDemocrats combined", 
+       x = "Number of donations from individuals",
+       y = NULL)
+```
+
+```{r}
+repeat_donors <- receipts |> 
+  as_tibble() |> 
+  filter(entity_type_desc == "INDIVIDUAL") |> 
+  count(committee_name, contributor_first_name, contributor_last_name, contributor_zip) |> 
+  filter(n >= 5) |> 
+  count(committee_name)
+```
+
+The Nevada Republican Central Committee also attracted the most repeat donors, with `r repeat_donors |> filter(committee_name == "NEVADA REPUBLICAN CENTRAL COMMITTEE") |> pull(n)` individuals donating to the committee at least five times over the campaign cycle. The Nevada State Democratic Party had `r repeat_donors |> filter(committee_name == "NEVADA STATE DEMOCRATIC PARTY") |> pull(n)` repeat donors and Nevada Democratic Victory had only `r repeat_donors |> filter(committee_name == "NEVADA DEMOCRATIC VICTORY") |> pull(n)`.
+
+```{r}
+amount_by_entity <- receipts |> 
+  group_by(committee_name, committee_name_clean, entity_type_desc) |> 
+  summarise(amount = sum(contribution_receipt_amount),
+            n = n()) |> 
+  group_by(committee_name) |> 
+  mutate(prop = amount / sum(amount),
+         amount_avg = amount / n)
+```
+
+These individual contributions were the largest source of funding to the Republican committee, making up `r amount_by_entity |> filter(committee_name == "NEVADA REPUBLICAN CENTRAL COMMITTEE", entity_type_desc == "INDIVIDUAL") |> pull(prop) |> percent()` of their total revenue. At first glance, it appears that internal fighting within the Democratic party is clearly illustrated by their different major sources of funding. Nevada Democratic Victory's main source was the party committees; whereas, the Nevada State Democratic Party mainly received funding from other committees. However, this appears to be the product of inconsistent data entry, with the DCCC, DSCC, and DNC being categorized as political party committees in relation to Nevada Democratic Victory and as other committees in relation to the Nevada State Democratic Party. 
+
+```{r}
+amount_by_entity |> 
+  mutate(entity_type_desc = str_to_sentence(entity_type_desc)) |> 
+  ggplot(aes(x = amount / 1000, y = entity_type_desc)) + 
+  geom_col() + 
+  facet_wrap(~ committee_name_clean) + 
+  theme_custom() + 
+  labs(title = "Major sources of funding for all committees were individuals and political \ncommittees",
+       x = "Amount ($1,000)",
+       y = NULL)
+```
+
+```{r}
+indiv_avg_ndv <- amount_by_entity |> 
+  filter(entity_type_desc == "INDIVIDUAL", committee_name == "NEVADA DEMOCRATIC VICTORY") |> 
+  pull(amount_avg)
+
+indiv_avg_nsdp <- amount_by_entity |> 
+  filter(entity_type_desc == "INDIVIDUAL", committee_name == "NEVADA STATE DEMOCRATIC PARTY") |> 
+  pull(amount_avg)
+
+indiv_avg_nrcc <- amount_by_entity |> 
+  filter(entity_type_desc == "INDIVIDUAL", committee_name == "NEVADA REPUBLICAN CENTRAL COMMITTEE") |> 
+  pull(amount_avg)
+```
+
+Nevada Democratic Victory attracted many high value donations from individuals, with an average donation of `r dollar(indiv_avg_ndv, accuracy = 1)`. This is `r round(indiv_avg_ndv/indiv_avg_nsdp, 1)` times the average donation made to the Nevada State Democratic Party and `r round(indiv_avg_ndv/indiv_avg_nrcc, 1)` times that made to the Nevada Republican Central Committee. 
+
+```{r}
+amount_by_entity |> 
+  filter(entity_type_desc == "INDIVIDUAL") |> 
+  ggplot(aes(x = amount_avg, y = reorder(committee_name_clean, amount_avg))) + 
+  geom_col() + 
+  theme_custom() + 
+  labs(title = "Nevada Democratic Victory received extraordinarily large donations from \nindividuals on average",
+       x = "Amount donated by individuals on average ($)",
+       y = NULL)
+```
+
+Interestingly, the Nevada State Democratic Party received more donations from individuals in California than in Nevada. They where the only committee to receive more donations from individuals living outside of Nevada than inside the state. 
+
+Both the Nevada Republican Central Committee and Nevada State Democratic Party have a more geographically diverse set of donors than Nevada Democratic Victory. This is possibly a product of out-of-state donors not understanding the split in the Democratic committees and defaulting to the longer running Nevada State Democratic Party. Alternatively, this could highlight where more establishment voters sit. They could be using the split in Nevada to express their support for establishment elements of the Democratic party. We would need to do more work to establish this motivation, perhaps through interviews.  
+
+```{r}
+state_receipts <- receipts |> 
+  filter(entity_type_desc == "INDIVIDUAL") |> 
+  group_by(contributor_state, committee_name, committee_name_clean) |> 
+  summarise(amount = sum(contribution_receipt_amount))
+```
+
+```{r}
+
+p1 <- states_sf |> 
+  left_join(
+    filter(state_receipts, committee_name == "NEVADA REPUBLICAN CENTRAL COMMITTEE"), by = c("stusps" = "contributor_state")
+  ) |> 
+  filter(stusps != "AK") |>
+  mutate(amount = replace_na(amount, 1)) |> 
+  ggplot() + 
+  geom_sf(aes(fill = log(amount))) + 
+  theme_void() + 
+  theme(legend.position = "none") + 
+  scale_fill_gradient(low = "yellow", high = "red", na.value = NA) + 
+  labs(title = "NRCC")
+
+p2 <- states_sf |> 
+  left_join(
+    filter(state_receipts, committee_name == "NEVADA STATE DEMOCRATIC PARTY"), by = c("stusps" = "contributor_state")
+  ) |> 
+  filter(stusps != "AK") |>
+  mutate(amount = replace_na(amount, 1)) |> 
+  ggplot() + 
+  geom_sf(aes(fill = log(amount))) + 
+  theme_void() + 
+  theme(legend.position = "none") + 
+  scale_fill_gradient(low = "yellow", high = "red", na.value = NA) + 
+  labs(title = "NSDP")
+
+p3 <- states_sf |> 
+  left_join(
+    filter(state_receipts, committee_name == "NEVADA DEMOCRATIC VICTORY"), by = c("stusps" = "contributor_state")
+  ) |> 
+  filter(stusps != "AK") |>
+  mutate(amount = replace_na(amount, 1)) |> 
+  ggplot() + 
+  geom_sf(aes(fill = log(amount))) + 
+  theme_void() + 
+  theme(legend.position = "none") + 
+  scale_fill_gradient(low = "yellow", high = "red", na.value = NA) + 
+  labs(title = "NDV")
+
+p1 / p2 / p3
+```
+
+## What did each party spend its money on? 
+
+```{r}
+total_spending <- spending |> 
+  group_by(committee_name, committee_name_clean) |> 
+  summarise(amount = sum(disbursement_amount))
+```
+
+The Nevada Republican Central Committee spent `r percent(total_spending |> filter(committee_name == "NEVADA REPUBLICAN CENTRAL COMMITTEE") |> pull(amount) / total_spending |> filter(committee_name == "NEVADA STATE DEMOCRATIC PARTY") |> pull(amount))` of the total spending made by the next largest spending committee, the Nevada State Democratic Party. Despite this, they secured 48% of the total Senate vote and 45.9%, 48%, and 47.6% of the votes in the House races they lost. 
+
+```{r}
+ggplot(total_spending, aes(x = amount / 1000, y = reorder(committee_name_clean, amount))) + 
+  geom_col() + 
+  theme_custom() + 
+  labs(title = "Nevada Democratic Victory outspent the other two major committees",
+       x = "Amount spent ($1,000)",
+       y = NULL)
+```
+
+There were few noteworthy differences in spending between each of the committees. Each spent large proportions of their budget on canvassing and their campaign staff. Each dramatically ramped up spending closer to the election. 
+
+```{r}
+spending |> 
+  mutate(disbursement_date = ymd(disbursement_date),
+         date = str_sub(as.character(disbursement_date), 1, 7),
+         date = ym(date)) |>
+  group_by(committee_name_clean, date) |> 
+  summarise(amount = sum(disbursement_amount)) |> 
+  ggplot(aes(x = date, y = amount, colour = committee_name_clean)) + 
+  geom_line() + 
+  theme_custom() + 
+  labs(title = "In-fighting amongst the Democrats highlighted in their spending over time",
+       x = NULL, 
+       y = "Amount ($)")
+```
+
+The big spike in spending by the Nevada State Democratic Party in early 2021 is the funneling of money out of the committee ahead of internal elections discussed in the introduction of this brief, when they transferred $450,000 to the Democratic Senatorial Campaign Committee. You can see when members of the establishment broke away to start Nevada Democratic Victory in July 2021. After they were established, they outspent the other committees across nearly the whole campaign. Unfortunately, I only have access to data up to 19 October 2022, so I cannot comment on the dramatic decline in Nevada Democratic Victory spending in October.
